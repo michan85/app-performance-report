@@ -50,7 +50,9 @@ The primary use case is to measure stats while you run the app (UI test) and see
    raw data saved to: com.news24.ui.core_2020-04-04T09:59:55_data.json
    ```
 
+
 4. view the report
+
    ![Report](report.jpg)
 
 ### Compare Sessions
