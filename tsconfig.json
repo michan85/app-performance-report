@@ -1,0 +1,25 @@
+{
+  "exclude": [],
+  "compilerOptions": {
+    "noEmit": true,
+    "target": "es2017",
+    "lib": ["dom", "esnext"],
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "strict": true,
+    "strictNullChecks": true,
+    "allowJs": false,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+
+    "typeRoots": ["node_modules/@types"],
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "experimentalDecorators": true,
+    "baseUrl": ".",
+
+    "paths": {
+    
+    }
+  }
+}
