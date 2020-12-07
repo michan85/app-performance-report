@@ -6,6 +6,7 @@ import {
   NetworkMetricCollector,
   WebKitMetricCollector,
   MetricData,
+  Sample,
 } from './metrics'
 import {
   sum,
@@ -30,12 +31,14 @@ export interface PerformanceRecorderArgs {
   folder?: string
   runReport: boolean
   export: boolean
+  reportName?: string
 }
 
 export interface RunData<T = any> {
   runId: string
   summary: string
   name: string
+  reportName: string
   duration: number
   metrics: Array<MetricData<T>>
 }
@@ -46,12 +49,13 @@ export enum Metrics {
 }
 
 // tslint:disable-next-line: max-classes-per-file
-export class PerformanceRecorder {
+export class PerformanceRecorder<T extends Sample = any> {
   timer: any
   interactive = false
   folder?: string
   startTime?: Date
   name: string
+  reportName?: string
   duration = -1
   runReport = true
   export = true
@@ -69,14 +73,14 @@ export class PerformanceRecorder {
     )
   }
 
-  metrics = [] as MetricCollector[]
+  metrics = [] as Array<MetricCollector<T>>
 
   start() {
     this.startTime = new Date()
     if (this.interactive) {
       this.timer = setInterval(this.updateStats, 1000)
     }
-    this.metrics.map(m => m.start())
+    this.metrics.map((m) => m.start())
   }
 
   statsUpdate = 0
@@ -86,18 +90,22 @@ export class PerformanceRecorder {
 
     readline.clearLine(process.stdout, 0)
     readline.cursorTo(process.stdout, 0)
-    const proc = this.metrics.filter(m => m.metric === Metrics.Process)
-    const net = this.metrics.filter(m => m.metric === Metrics.Network)
+    const proc = (this.metrics.filter(
+      (m) => m.metric === Metrics.Process,
+    ) as unknown) as Array<MetricCollector<ProcStat>>
+    const net = (this.metrics.filter(
+      (m) => m.metric === Metrics.Network,
+    ) as unknown) as Array<MetricCollector<NetStat>>
     const indicator = this.loader[this.statsUpdate % this.loader.length],
-      cpu = sum(proc.map(m => m.currentValue.cpu)),
-      mem = sum(proc.map(m => m.currentValue.mem)),
-      rx = sum(net.map(m => m.currentValue.rx)),
-      tx = sum(net.map(m => m.currentValue.tx)),
-      avgCpu = avg(proc.flatMap(m => m.samples.map(s => s.cpu))),
-      avgMem = avg(proc.flatMap(m => m.samples.map(s => s.mem)))
+      cpu = sum(proc.map((m) => m.currentValue.cpu)),
+      mem = sum(proc.map((m) => m.currentValue.mem)),
+      rx = sum(net.map((m) => m.currentValue.rx)),
+      tx = sum(net.map((m) => m.currentValue.tx)),
+      avgCpu = avg(proc.flatMap((m) => m.samples.map((s) => s.cpu))),
+      avgMem = avg(proc.flatMap((m) => m.samples.map((s) => s.mem)))
 
     const vars = [cpu, mem, rx, tx, avgCpu, avgMem]
-    if (vars.some(Number.isNaN) || vars.some(v => v < 0)) {
+    if (vars.some(Number.isNaN) || vars.some((v) => v < 0)) {
       Log.warn('Invalid Values probably a bug...', {
         cpu,
         mem,
@@ -117,13 +125,13 @@ export class PerformanceRecorder {
     )
     Log.verbose(
       ...this.metrics.map(
-        s => `\n${s.metric} ${s.name}: ${JSON.stringify(s.currentValue)}`,
+        (s) => `\n${s.metric} ${s.name}: ${JSON.stringify(s.currentValue)}`,
       ),
     )
   }
 
   stop() {
-    this.metrics.forEach(m => m.stop())
+    this.metrics.forEach((m) => m.stop())
     this.duration = new Date().getTime() - this.startTime!.getTime()
     if (this.timer) {
       clearInterval(this.timer)
@@ -159,8 +167,9 @@ export class PerformanceRecorder {
       runId: this.runId || '',
       summary: '',
       name: this.name,
+      reportName: this.reportName ?? this.name,
       duration: this.duration,
-      metrics: this.metrics.map(m => m.toJson()),
+      metrics: this.metrics.map((m) => m.toJson()),
     }
     data.summary = runSummary(data)
     return data
@@ -219,15 +228,16 @@ export class AndroidRecorder extends PerformanceRecorder {
           header[this.txField] = 'tx'
           const entries = output
             .split('\n')
-            .filter(l => l)
-            .map(line => {
+            .filter((l) => l)
+            .map((line) => {
               const { rx, tx } = parseShellOutput(line, header)
               return { rx: parseFloat(rx), tx: parseFloat(tx) }
             })
 
           metricCollector.emitSample({
-            rx: sum(entries.map(e => e.rx)),
-            tx: sum(entries.map(e => e.tx)),
+            rx: sum(entries.map((e) => e.rx)),
+            tx: sum(entries.map((e) => e.tx)),
+            tick: metricCollector.tick,
           })
         },
       }),
@@ -254,7 +264,7 @@ export class AndroidRecorder extends PerformanceRecorder {
       })
       .stdout.trim()
       .split(' ')
-      .map(s => s.trim())
+      .map((s) => s.trim())
 
     try {
       assert(

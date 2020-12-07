@@ -32,6 +32,7 @@ const cliRecord = (
     logLevel,
     report,
     save,
+    reportName,
   }: {
     folder: string
     interactive: boolean
@@ -39,6 +40,7 @@ const cliRecord = (
     logLevel: string
     report: boolean
     save: boolean
+    reportName: string
   },
 ) => {
   Log.level = (LogLevel as any)[
@@ -54,6 +56,7 @@ const cliRecord = (
   const RecorderClazz: typeof PerformanceRecorder = Platforms[platform]
   const profiler = new RecorderClazz({
     name,
+    reportName,
     interactive,
     folder,
     runReport: report,
@@ -89,6 +92,7 @@ program
   .option('--no-interactive', ` disables interactive mode, only print totals`)
   .option('--no-report', `dont generate run report`)
   .option('--no-save', `dont save data`)
+  .option('-n, --reportName <name>', `the name of the profile`, '')
   .option('-f, --folder <folder>', `the folder to save the data to`, false)
   .option('-d, --doctor', `checks your setup`, false)
   .option(
@@ -106,6 +110,7 @@ program
   .option('--no-interactive', ` disables interactive mode, only print totals`)
   .option('--no-report', `dont generate run report`)
   .option('--no-save', `dont save data`)
+  .option('-n, --reportName <name>', `the name of the profile`, '')
   .option('-f, --folder <folder>', `the folder to save the data to`, false)
   .option('-d, --doctor', `checks your setup`, false)
   .option(

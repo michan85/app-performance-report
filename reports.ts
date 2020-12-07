@@ -63,12 +63,12 @@ export class RawDataExport extends RunReport {
 // tslint:disable-next-line: max-classes-per-file
 export class MarkdownRunReport extends RunReport {
   generate() {
-    const name = this.data.name
+    const name = this.data.reportName ?? this.data.name
     const data = this.data
 
     const metricCollectors = this.data.metrics
       .map(
-        mc => `
+        (mc) => `
 ## ${mc.name}
 
 ${mc.dataSets.map(DataSetChart).join('\n')}`,
@@ -77,6 +77,7 @@ ${mc.dataSets.map(DataSetChart).join('\n')}`,
 
     const tpl = `
 # ${name} Profile Report
+for ${this.data.name}
 
 ${data.summary}
 
@@ -100,19 +101,19 @@ export const runSummary = (data: RunData) => {
 }
 
 const processMetrics = (data: RunData) => {
-  return data.metrics.filter(m => m.metric === Metrics.Process)
+  return data.metrics.filter((m) => m.metric === Metrics.Process)
 }
 const netMetrics = (data: RunData) => {
-  return data.metrics.filter(m => m.metric === Metrics.Network)
+  return data.metrics.filter((m) => m.metric === Metrics.Network)
 }
 
 export const computeTotals = (data: RunData) => {
-  const proc = processMetrics(data).flatMap(m => m.samples),
-    net = netMetrics(data).flatMap(m => m.samples),
-    cpu = proc.map(s => s.cpu),
-    mem = proc.map(p => p.mem),
-    rx = net.map(p => p.rx),
-    tx = net.map(p => p.tx)
+  const proc = processMetrics(data).flatMap((m) => m.samples),
+    net = netMetrics(data).flatMap((m) => m.samples),
+    cpu = proc.map((s) => s.cpu),
+    mem = proc.map((p) => p.mem),
+    rx = net.map((p) => p.rx),
+    tx = net.map((p) => p.tx)
 
   return {
     cpuAvg: avg(cpu),
@@ -129,7 +130,7 @@ const fmt = (n: number) => parseFloat(n.toFixed(2))
 const loadSession = (folder: string) => {
   const runs = shell
     .ls(`${folder}/*data.json`)
-    .map(d => JSON.parse(fs.readFileSync(d).toString())) as RunData[]
+    .map((d) => JSON.parse(fs.readFileSync(d).toString())) as RunData[]
 
   const totals = runs.map(computeTotals)
 
@@ -139,11 +140,11 @@ const loadSession = (folder: string) => {
     stdDevP: fmt((math.std(data) / avg(data)) * 100),
   })
   return {
-    cpu: dsAvg(totals.map(t => t.cpuAvg)),
-    mem: dsAvg(totals.map(t => t.memAvg)),
-    rxTot: dsAvg(totals.map(t => t.rxTot)),
-    txTot: dsAvg(totals.map(t => t.txTot)),
-    duration: dsAvg(runs.map(r => r.duration)),
+    cpu: dsAvg(totals.map((t) => t.cpuAvg)),
+    mem: dsAvg(totals.map((t) => t.memAvg)),
+    rxTot: dsAvg(totals.map((t) => t.rxTot)),
+    txTot: dsAvg(totals.map((t) => t.txTot)),
+    duration: dsAvg(runs.map((r) => r.duration)),
     runs: totals.length,
   }
 }
@@ -187,7 +188,7 @@ const sessionCompare = (a: string, b: string, bName: string = b) => {
       `uses `,
       'CPU',
       '',
-      v => `${v}%`,
+      (v) => `${v}%`,
     ),
     mem: desc(
       sessionA.mem.avg,
@@ -239,16 +240,16 @@ export class SessionCompareReport extends Report {
   }
 
   generate() {
-    const data = this.variations.map(v => sessionCompare(this.baseLine, v))
+    const data = this.variations.map((v) => sessionCompare(this.baseLine, v))
 
     const tpl = data
       .map(
-        compare => `
+        (compare) => `
 ## ${compare.variation}
 
 ${Object.values(compare.data)
-  .map(m => (Math.abs(m.pctChange) > 10 ? `__${m.desc}__` : m.desc))
-  .map(m => `- ${m}`)
+  .map((m) => (Math.abs(m.pctChange) > 10 ? `__${m.desc}__` : m.desc))
+  .map((m) => `- ${m}`)
   .join('\n')}`,
       )
       .join('\n')

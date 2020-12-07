@@ -2,11 +2,11 @@ import childProcess, { ChildProcess } from 'child_process'
 import { Log, chart, parseShellOutput, parseBytes, sum } from './utils'
 import { strict as assert } from 'assert'
 
-export interface NetStat {
+export interface NetStat extends Sample {
   rx: number
   tx: number
 }
-export interface ProcStat {
+export interface ProcStat extends Sample {
   cpu: number
   mem: number
 }
@@ -22,18 +22,23 @@ export interface MetricData<T = any> {
   samples: T[]
   dataSets: Dataset[]
 }
+
 export interface Dataset {
   name: string
-  data: number[]
+  data: number[] | Array<{ tick: number; value: number }>
   dataType: DataType
 }
 
-export type OutputProcessor<T = any> = (
+export type OutputProcessor<T extends Sample> = (
   line: string,
   metricCollector: MetricCollector<T>,
 ) => void
 
-export class MetricCollector<T = any> {
+export interface Sample {
+  tick: number
+}
+
+export class MetricCollector<T extends Sample> {
   cmd: string
   outputProcessor?: OutputProcessor<T>
   process?: ChildProcess
@@ -66,8 +71,15 @@ export class MetricCollector<T = any> {
   initialValue() {
     return {} as T
   }
+  startTime?: number
+
+  get tick() {
+    const now = new Date().getTime()
+    return (now - (this.startTime ?? now)) / 1000
+  }
   start() {
     const p = childProcess.spawn('sh', ['-c', this.cmd])
+    this.startTime = new Date().getTime()
     p?.stdout!.on('data', (data: string) => {
       // tslint:disable-next-line: no-parameter-reassignment
       data = `${data}`.trim()
@@ -75,7 +87,7 @@ export class MetricCollector<T = any> {
       Log.debug(
         data
           .split('\n')
-          .map(l => `${this.name}:DATA-LINE:${l}`)
+          .map((l) => `${this.name}:DATA-LINE:${l}`)
           .join('\n'),
       )
       if (this.outputProcessor) return this.outputProcessor(data, this)
@@ -119,7 +131,7 @@ export class MetricCollector<T = any> {
 
     return dataSets
       .map(
-        ds => `
+        (ds) => `
   __${ds.name}__
   ${chart(ds)}`,
       )
@@ -134,7 +146,7 @@ export class MetricCollector<T = any> {
 // tslint:disable-next-line: max-classes-per-file
 export class ProcessMetricCollector extends MetricCollector<ProcStat> {
   initialValue() {
-    return { cpu: 0, mem: 0 }
+    return { cpu: 0, mem: 0, tick: 0 }
   }
   processOutput(output: string) {
     // todo: what when multiple processes match, do we sum? is it an error?
@@ -144,19 +156,23 @@ export class ProcessMetricCollector extends MetricCollector<ProcStat> {
     )
 
     const { cpu, mem } = parseShellOutput(output, ['cpu', 'mem'])
-    this.emitSample({ cpu: parseFloat(cpu), mem: parseBytes(mem) })
+    this.emitSample({
+      cpu: parseFloat(cpu),
+      mem: parseBytes(mem),
+      tick: this.tick,
+    })
   }
 
   getDataSets() {
     return [
       {
         name: 'CPU',
-        data: this.samples.map(v => v.cpu),
+        data: this.samples.map((v) => ({ value: v.cpu, tick: v.tick })),
         dataType: DataType.value,
       },
       {
         name: 'MEMORY',
-        data: this.samples.map(v => v.mem),
+        data: this.samples.map((v) => ({ value: v.mem, tick: v.tick })),
         dataType: DataType.bytes,
       },
     ]
@@ -166,11 +182,11 @@ export class ProcessMetricCollector extends MetricCollector<ProcStat> {
 // tslint:disable-next-line: max-classes-per-file
 export class NetworkMetricCollector extends MetricCollector<NetStat> {
   initialValue() {
-    return { rx: 0, tx: 0 }
+    return { rx: 0, tx: 0, tick: 0 }
   }
   processOutput(output: string) {
     const { rx, tx } = parseShellOutput(output, ['name', 'rx', 'tx'])
-    this.emitSample({ rx: parseBytes(rx), tx: parseBytes(tx) })
+    this.emitSample({ rx: parseBytes(rx), tx: parseBytes(tx), tick: this.tick })
   }
   startNetOffset = { rx: 0, tx: 0 }
 
@@ -183,6 +199,7 @@ export class NetworkMetricCollector extends MetricCollector<NetStat> {
       const s = {
         rx: sample.rx - this.startNetOffset.rx,
         tx: sample.tx - this.startNetOffset.tx,
+        tick: this.tick,
       }
       const last = this.samples[this.samples.length - 1]
       if (s.rx < last.rx || s.tx < last.tx) {
@@ -200,12 +217,12 @@ export class NetworkMetricCollector extends MetricCollector<NetStat> {
     return [
       {
         name: 'DATA RECEIVED',
-        data: this.samples.map(v => v.rx),
+        data: this.samples.map((v) => ({ value: v.rx, tick: v.tick })),
         dataType: DataType.bytes,
       },
       {
         name: 'DATA SENT',
-        data: this.samples.map(v => v.tx),
+        data: this.samples.map((v) => ({ value: v.tx, tick: v.tick })),
         dataType: DataType.bytes,
       },
     ]
@@ -222,17 +239,19 @@ export class WebKitMetricCollector extends NetworkMetricCollector {
   processOutput(output: string) {
     output
       .split('\n')
-      .map(line => parseShellOutput(line, ['name', 'rx', 'tx']))
+      .map((line) => parseShellOutput(line, ['name', 'rx', 'tx']))
       .forEach(({ name, rx, tx }: { name: string; rx: string; tx: string }) => {
         this.processMap[name] = {
           rx: parseBytes(rx),
           tx: parseBytes(tx),
+          tick: this.tick,
         }
       })
     const processTotals = Object.values(this.processMap)
     const s = {
-      rx: sum(processTotals.map(p => p.rx)),
-      tx: sum(processTotals.map(p => p.tx)),
+      rx: sum(processTotals.map((p) => p.rx)),
+      tx: sum(processTotals.map((p) => p.tx)),
+      tick: this.tick,
     }
 
     this.emitSample(s)

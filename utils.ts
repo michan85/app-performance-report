@@ -113,11 +113,23 @@ export class Log {
 }
 
 export const chart = (dataset: Dataset) => {
-  let { data, name } = dataset
-
+  let { data: _data, name } = dataset
+  let labels = []
+  let data: number[] = []
+  // check for backwards compat of old dataset data format
+  if (typeof _data[0] === 'number') {
+    // old format
+    labels = range(0, dataset.data.length)
+  } else {
+    const tmp = _data as Array<{ tick: number; value: number }>
+    data = tmp.map((v) => v.value)
+    labels = tmp.map((v) => Math.round(v.tick))
+  }
+  let yLabel = 'value'
   if (dataset.dataType === DataType.bytes) {
-    data = data.map(d => d / 1024 / 1024)
+    data = data.map((d) => d / 1024 / 1024)
     name = `${name} (MB)`
+    yLabel = 'MB'
   }
 
   return `
@@ -127,7 +139,7 @@ export const chart = (dataset: Dataset) => {
       type: 'line',
 
       data: {
-        labels: range(0, dataset.data.length),
+        labels,
         datasets: [
           {
             data,
@@ -136,6 +148,35 @@ export const chart = (dataset: Dataset) => {
             fill: false,
           },
         ],
+      },
+      options: {
+        responsive: true,
+        scales: {
+          xAxes: [
+            {
+              display: true,
+              scaleLabel: {
+                display: true,
+                labelString: 'time',
+              },
+              ticks: {
+                major: {
+                  fontStyle: 'bold',
+                  fontColor: '#FF0000',
+                },
+              },
+            },
+          ],
+          yAxes: [
+            {
+              display: true,
+              scaleLabel: {
+                display: true,
+                labelString: yLabel,
+              },
+            },
+          ],
+        },
       },
     },
     null,
@@ -160,9 +201,9 @@ export function range(start: number, end: number) {
  */
 
 try {
-  ;[].flatMap(i => i)
+  ;[].flatMap((i) => i)
 } catch (e) {
-  ;((Array.prototype as unknown) as any).flatMap = function(cb: () => any) {
+  ;((Array.prototype as unknown) as any).flatMap = function (cb: () => any) {
     return [].concat(...this.map(cb))
   }
 }
